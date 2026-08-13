@@ -19,12 +19,12 @@
     "name":"user_agent",
     "type":"STRING"
   },
-	{
+  {
     "mode":"NULLABLE",
     "name":"gclid",
     "type":"STRING"
   },
-	{
+  {
     "mode":"NULLABLE",
     "name":"dclid",
     "type":"STRING"
@@ -64,36 +64,66 @@
     "name":"marketing_tactic",
     "type":"STRING"
   },
-	{
-		"mode":"NULLABLE",
-		"name":"gclsrc",
-		"type":"STRING"
-	},
-	{
-		"mode":"NULLABLE",
-		"name":"_gl",
-		"type":"STRING"
-	},
-	{
-		"mode":"NULLABLE",
-		"name":"wbraid",
-		"type":"STRING"
-	},
-	{
-		"mode":"NULLABLE",
-		"name":"gbraid",
-		"type":"STRING"
-	},
-	{
-		"mode":"NULLABLE",
-		"name":"protocol_version",
-		"type":"STRING"
-	},
-	{
-		"mode":"NULLABLE",
-		"name":"gcs",
-		"type":"STRING"
-	},
+  {
+    "mode":"NULLABLE",
+    "name":"source_platform",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"campaign_id",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"gclsrc",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"_gl",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"wbraid",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"gbraid",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"gad_source",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"protocol_version",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"gcs",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"gcd",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"dma",
+    "type":"STRING"
+  },
+  {
+    "mode":"NULLABLE",
+    "name":"npa",
+    "type":"STRING"
+  },
   {
     "mode":"NULLABLE",
     "name":"gtm_version",
@@ -368,6 +398,11 @@
           },
           {
             "mode":"NULLABLE",
+            "name":"int_value",
+            "type":"INT64"
+          },
+          {
+            "mode":"NULLABLE",
             "name":"float_value",
             "type":"FLOAT64"
           }
@@ -394,6 +429,11 @@
             "mode":"NULLABLE",
             "name":"string_value",
             "type":"STRING"
+          },
+          {
+            "mode":"NULLABLE",
+            "name":"int_value",
+            "type":"INT64"
           },
           {
             "mode":"NULLABLE",

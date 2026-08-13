@@ -1,7 +1,7 @@
 #!/bin/bash
 ###########################################################################
 #
-#  Copyright 2022 Google Inc.
+#  Copyright 2026 Google LLC
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,20 +15,31 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+###########################################################################
+
+set -e
 
 echo "~~~~~~~~ Welcome ~~~~~~~~~~"
-echo "Enabling required APIs."
-gcloud services enable bigquery.googleapis.com --async
+
 read -p "Please enter your GCP PROJECT ID: " project_id
+echo "Enabling required APIs."
+gcloud services enable bigquery.googleapis.com --async --project="$project_id" || \
+    echo "WARNING: Could not enable bigquery.googleapis.com (it may already be enabled). Continuing."
+read -p "Please enter BigQuery location/region [default: US]: " location
+location=${location:-US}
 read -p "Please enter a new BigQuery dataset name (cannot include spaces): " dataset_id
 echo "~~~~~~~~ Creating BigQuery Dataset ~~~~~~~~~~"
-bq mk -d $project_id:$dataset_id
-echo "~~~~~~~~ BigQuery Dataset Create ~~~~~~~~~~"
+bq mk --location="$location" -d "$project_id:$dataset_id"
+echo "~~~~~~~~ BigQuery Dataset Created ~~~~~~~~~~"
+
 read -p "Please enter a new BigQuery table name (cannot include spaces): " table_id
 echo "~~~~~~~~ Creating BigQuery Table ~~~~~~~~~~"
-bq mk -t --time_partitioning_type=DAY \
-	--schema=./sgtm_ga4_to_bigquery_schema.json \
-	$project_id:$dataset_id.$table_id
+bq mk -t \
+    --location="$location" \
+    --time_partitioning_type=DAY \
+    --clustering_fields=event_name,ga_session_id \
+    --schema=./sgtm_ga4_to_bigquery_schema.json \
+    "$project_id:$dataset_id.$table_id"
 echo "~~~~~~~~ BigQuery Table Created ~~~~~~~~~~"
 
 echo "***************************
@@ -42,4 +53,5 @@ echo "***************************
 * - Project ID: $project_id
 * - Dataset ID: $dataset_id
 * - Table ID: $table_id
+* - Location: $location
 ***************************"
