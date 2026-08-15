@@ -43,7 +43,7 @@ rm -rf sgtm-ga4-to-bigquery && git clone https://github.com/cloudymoma/sgtm-ga4-
 
 *   **Measurement ID**
     *   Enter either the measurement ID for the hits you want written to BigQuery (e.g. `G-XXXXXXXXXX`), or enter `*` to match all measurement IDs. The field defaults to `*`.
-*   **Write IP Address to BigQuery**
+*   **Write IP Address**
     *   Check the box (or provide a variable that resolves to `true` or `false`) to include the originating IP address in BigQuery using the `getRemoteAddress()` API.
 *   **BigQuery Settings**
     *   Enter the Google Cloud Project ID, BigQuery Dataset ID, and BigQuery Table ID in their respective fields.

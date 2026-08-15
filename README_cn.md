@@ -43,7 +43,7 @@ rm -rf sgtm-ga4-to-bigquery && git clone https://github.com/cloudymoma/sgtm-ga4-
 
 *   **Measurement ID（衡量 ID）**
     *   输入需要写入 BigQuery 的数据流衡量 ID（例如 `G-XXXXXXXXXX`），或者输入 `*` 匹配所有衡量 ID。默认值为 `*`。
-*   **Write IP Address to BigQuery（写入 IP 地址）**
+*   **Write IP Address（写入 IP 地址）**
     *   勾选该选项（或传入解析为 `true`/`false` 的变量），使用 `getRemoteAddress()` API 将请求的来源 IP 地址记录到 BigQuery 中。
 *   **BigQuery Settings（BigQuery 设置）**
     *   在对应输入框中分别填入 Google Cloud 项目 ID (Project ID)、BigQuery 数据集 ID (Dataset ID) 以及 BigQuery 数据表 ID (Table ID)。
