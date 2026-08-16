@@ -18,25 +18,25 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ 1. 客户端 / 浏览器 / App (gtag.js / GTM Web)                 │
+│ 1. 客户端 / 浏览器 / App (gtag.js / GTM Web)                   │
 └──────────────────────────────┬───────────────────────────────┘
                                │ HTTPS 请求 (GA4 hits)
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ 2. sGTM GCP 项目（所有代码植入服务器集中在一个项目中）       │
+│ 2. sGTM GCP 项目（所有代码植入服务器集中在一个项目中）              |
 │                                                              │
-│    Cloud Run 服务 "gtm-server-site1"  ← GTM 容器 1           │
-│    Cloud Run 服务 "gtm-server-site2"  ← GTM 容器 2           │
-│    Cloud Run 服务 "gtm-server-..."    ← 每个容器一个服务     │
+│    Cloud Run 服务 "gtm-server-site1"  ← GTM 容器 1            │
+│    Cloud Run 服务 "gtm-server-site2"  ← GTM 容器 2            │
+│    Cloud Run 服务 "gtm-server-..."    ← 每个容器一个服务        │
 └──────────────────────────────┬───────────────────────────────┘
                                │ BigQuery Streaming API
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ 3. 集中式 BigQuery 项目（可与上方项目为同一个项目）          │
+│ 3. 集中式 BigQuery 项目（可与上方项目为同一个项目）                │
 │                                                              │
-│    analytics_site1.events  ← 来自 gtm-server-site1 的数据    │
-│    analytics_site2.events  ← 来自 gtm-server-site2 的数据    │
-│    （每张表均按天分区与聚簇 Partitioned & Clustered）        │
+│    analytics_site1.events  ← 来自 gtm-server-site1 的数据     │
+│    analytics_site2.events  ← 来自 gtm-server-site2 的数据     │
+│    （每张表均按天分区与聚簇 Partitioned & Clustered）            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
