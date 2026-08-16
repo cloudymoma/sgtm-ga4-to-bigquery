@@ -18,25 +18,25 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ 1. 客户端 / 浏览器 / App (gtag.js / GTM Web)                   │
+│ 1. 客户端 / 浏览器 / App (gtag.js / GTM Web)                 │
 └──────────────────────────────┬───────────────────────────────┘
                                │ HTTPS 请求 (GA4 hits)
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ 2. sGTM GCP 项目（所有代码植入服务器集中在一个项目中）              │
+│ 2. sGTM GCP 项目（所有代码植入服务器集中在一个项目中）       │
 │                                                              │
-│    Cloud Run 服务 "gtm-server-site1"  ← GTM 容器 1            │
-│    Cloud Run 服务 "gtm-server-site2"  ← GTM 容器 2            │
-│    Cloud Run 服务 "gtm-server-..."    ← 每个容器一个服务        │
+│    Cloud Run 服务 "gtm-server-site1"  ← GTM 容器 1           │
+│    Cloud Run 服务 "gtm-server-site2"  ← GTM 容器 2           │
+│    Cloud Run 服务 "gtm-server-..."    ← 每个容器一个服务     │
 └──────────────────────────────┬───────────────────────────────┘
                                │ BigQuery Streaming API
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ 3. 集中式 BigQuery 项目（可与上方项目为同一个项目）                │
+│ 3. 集中式 BigQuery 项目（可与上方项目为同一个项目）          │
 │                                                              │
-│    analytics_site1.events  ← 来自 gtm-server-site1 的数据     │
-│    analytics_site2.events  ← 来自 gtm-server-site2 的数据     │
-│    （每张表均按天分区与聚簇 Partitioned & Clustered）            │
+│    analytics_site1.events  ← 来自 gtm-server-site1 的数据    │
+│    analytics_site2.events  ← 来自 gtm-server-site2 的数据    │
+│    （每张表均按天分区与聚簇 Partitioned & Clustered）        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -199,3 +199,79 @@ rm -rf sgtm-ga4-to-bigquery && git clone https://github.com/cloudymoma/sgtm-ga4-
 *   服务端推导的地理位置信息（国家/地区、省份、城市），除非在自定义参数中显式传递
 *   Google Signals 数据
 *   依赖于服务端解析 User-Agent 字符串的维度（会完整采集原始 User-Agent 字符串）
+
+
+---
+
+
+## 进阶指南：数据富化与增强（实时 ETL 与 ELT 方案）
+
+若您希望在数据入库前后，结合自有业务数据库或 CRM 系统对 GA4 事件进行增强（例如根据 `user_id` 查询用户的 VIP 等级、历史累计消费金额或所属客户群体），有两种成熟的架构方案可供选择：
+
+### 方案 A：实时管道内 ETL（服务端 GTM 实时增强）
+在数据流式写入 BigQuery **之前**，在 sGTM 容器内部完成数据查询与拼装。
+
+* **运作机制**：当事件到达 sGTM 时，代码模板通过内置 API 查询外部数据源，将查询到的字段追加到 `event_params` 或 `user_properties` 中，再一并写入 BigQuery。
+  * **子方案 A1（Firestore API —— 键值查询推荐）**：使用 sGTM 内置的 `Firestore.read()` API 进行快速键值查询。要求 Firestore 为 **Native 模式**；既可读取同一 GCP 项目，也可通过 `projectId` 选项跨项目读取。
+  * **子方案 A2（`sendHttpRequest` API —— 适用于 SQL / REST API）**：请求连接至 Cloud SQL/PostgreSQL/CRM 的 Cloud Function 或 REST API 微服务。
+* **适用场景**：当**下游实时营销代码**（如 Google Ads 转化调整、Meta Conversions API）也需要在请求生命周期内**立即使用**富化后的用户数据时。
+
+> [!IMPORTANT]
+> sGTM 中的各个代码 (Tag) 相互独立运行，无法读取彼此的数据。如下方示例所示，**在本 BigQuery 代码内部**做富化，只会富化写入 BigQuery 的数据行。若希望其他代码（Meta CAPI、Google Ads）也能使用查询结果，应改为在自定义**变量 (Variable)** 模板中执行查询——服务端变量可以返回 Promise，所有引用该变量的代码都会获得解析后的值——或使用 GTM 的**转换 (Transformations)** 功能为指定代码增强事件数据。另请注意：沙盒化 Promise 超过 5 秒未完成会自动超时。
+
+```javascript
+// 示例：在自定义 sGTM 代码模板内部使用 REST API 进行实时数据富化。
+// （eventRow、connectionInfo、options 与 data 均来自模板中已有的上下文代码。）
+const sendHttpRequest = require('sendHttpRequest');
+const encodeUriComponent = require('encodeUriComponent');
+const JSON = require('JSON');
+const BigQuery = require('BigQuery');
+
+const apiUrl = 'https://api.example.com/crm/user?id=' + encodeUriComponent(eventRow.user_id);
+
+sendHttpRequest(apiUrl, { method: 'GET', timeout: 1500 })
+  .then((response) => {
+    if (response.statusCode === 200) {
+      const crmData = JSON.parse(response.body);
+      eventRow.user_properties.push({
+        key: 'vip_tier',
+        value: { string_value: crmData.vip_tier }
+      });
+    }
+    return BigQuery.insert(connectionInfo, [eventRow], options);
+  })
+  .then(() => data.gtmOnSuccess(), () => data.gtmOnFailure());
+```
+
+---
+
+### 方案 B：下游 ELT 模式（BigQuery 库内关联增强 —— 分析场景推荐）
+原始事件以零延迟直接写入 BigQuery，后续在数仓内部通过 SQL 进行关联转换。
+
+* **运作机制**：sGTM 仅负责最快速地将原始事件写入 BigQuery，保证服务端零延迟、零外部依赖风险。BigQuery 中维护一张定期同步的 CRM/用户维表（如 `crm.users`）。通过 BigQuery 视图（View）、定时查询（Scheduled Query）或 dbt 模型通过 `user_id` 进行 `LEFT JOIN`。
+* **适用场景**：数据富化主要用于 BI 报表（Looker / Looker Studio）、数据分析看板、机器学习与深度建模分析。
+
+```sql
+-- 示例：使用 BigQuery SQL 视图实现下游 ELT 数据增强
+CREATE OR REPLACE VIEW `my-bigquery-project.analytics_site1.enriched_events` AS
+SELECT
+  e.*,
+  u.vip_tier,
+  u.registration_date,
+  u.lifetime_value
+FROM `my-bigquery-project.analytics_site1.events` e
+LEFT JOIN `my-bigquery-project.crm.users` u
+  ON e.user_id = u.user_id;
+```
+
+---
+
+### 方案对比：实时 ETL 与下游 ELT
+
+| 特性对比 | 方案 A：实时 ETL (sGTM 容器内) | 方案 B：下游 ELT (BigQuery 数仓内) |
+| :--- | :--- | :--- |
+| **数据增强位置** | sGTM 容器内部（BigQuery 写入前） | BigQuery 数据库内部（SQL 视图 / dbt） |
+| **对服务端延迟影响** | 增加 5–50ms 网络查询耗时 | **0ms（最快速度流式写入）** |
+| **故障 / 超时风险** | 外部 API 偶发故障可能影响代码执行 | **对线上实时数据流零干扰** |
+| **下游广告代码共享** | **仅当查询在共享变量或 Transformations 中执行时**，Meta CAPI / Google Ads 才能共享富化数据 | 仅在 BigQuery / BI 报表内可用 |
+| **最佳应用场景** | 实时广告竞价优化、实时受众同步 | 深度 BI 报表、业务分析看板、数据建模 |

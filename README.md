@@ -199,3 +199,79 @@ The tag captures:
 *   Geographic information derived server-side (country, region, city) unless forwarded in custom parameters
 *   Google Signals data
 *   Dimensions that rely on server-side parsing of the user agent string (raw user-agent string is collected)
+
+
+---
+
+
+## Advanced: Enriching Event Data (Real-Time ETL vs. ELT)
+
+If you want to enrich incoming GA4 event data with your own database or CRM records (e.g., looking up a user's VIP tier, customer lifetime value, or account type by `user_id`), there are two architectural patterns:
+
+### Option A: Real-Time In-Flight ETL (Server-Side GTM Enrichment)
+Enrich data **inside the sGTM container** before streaming it to BigQuery.
+
+* **How it works**: When an event arrives, sGTM queries an external data source via built-in APIs, appends the retrieved fields to `event_params` or `user_properties`, and inserts the enriched row into BigQuery.
+  * **Option A1 (Firestore API — Recommended for Key-Value Lookups)**: Uses sGTM's native `Firestore.read()` API for fast key-value lookups. Requires Firestore in **Native mode**; the lookup can read from the same GCP project or a different one (via the `projectId` option).
+  * **Option A2 (`sendHttpRequest` API — For SQL / REST APIs)**: Queries a Cloud Function, Cloud Run microservice, or REST API connected to your Cloud SQL/PostgreSQL/CRM database.
+* **When to use**: When downstream real-time marketing tags (e.g. Google Ads Conversion Adjustments, Meta Conversions API) *also* require the enriched user data in-flight.
+
+> [!IMPORTANT]
+> Tags in sGTM run independently and cannot see each other's data. Enriching **inside this BigQuery tag** (as in the example below) only enriches the BigQuery row. To make the looked-up value available to *other* tags (Meta CAPI, Google Ads), perform the lookup in a custom **variable** template instead — server-side variables may return a Promise, and every tag that references the variable receives the resolved value — or use GTM **Transformations** to augment the event for selected tags. Note that sandboxed promises time out after 5 seconds.
+
+```javascript
+// Example: real-time REST API enrichment inside a custom sGTM tag template.
+// (eventRow, connectionInfo, options and data come from the surrounding tag code.)
+const sendHttpRequest = require('sendHttpRequest');
+const encodeUriComponent = require('encodeUriComponent');
+const JSON = require('JSON');
+const BigQuery = require('BigQuery');
+
+const apiUrl = 'https://api.example.com/crm/user?id=' + encodeUriComponent(eventRow.user_id);
+
+sendHttpRequest(apiUrl, { method: 'GET', timeout: 1500 })
+  .then((response) => {
+    if (response.statusCode === 200) {
+      const crmData = JSON.parse(response.body);
+      eventRow.user_properties.push({
+        key: 'vip_tier',
+        value: { string_value: crmData.vip_tier }
+      });
+    }
+    return BigQuery.insert(connectionInfo, [eventRow], options);
+  })
+  .then(() => data.gtmOnSuccess(), () => data.gtmOnFailure());
+```
+
+---
+
+### Option B: Downstream ELT (Post-Ingestion Join in BigQuery — Recommended for Analytics)
+Stream raw data to BigQuery immediately with zero latency, and enrich downstream via SQL transformations.
+
+* **How it works**: sGTM writes raw event hits into BigQuery with zero latency and zero external dependency risk. A synchronized CRM/User table (e.g. `crm.users`) is maintained in BigQuery. A BigQuery SQL View, Scheduled Query, or dbt model performs a `LEFT JOIN` on `user_id`.
+* **When to use**: When enriched data is primarily needed for reporting, BI dashboards (Looker, Looker Studio), machine learning, or analytics models.
+
+```sql
+-- Example: BigQuery SQL View for downstream ELT enrichment
+CREATE OR REPLACE VIEW `my-bigquery-project.analytics_site1.enriched_events` AS
+SELECT
+  e.*,
+  u.vip_tier,
+  u.registration_date,
+  u.lifetime_value
+FROM `my-bigquery-project.analytics_site1.events` e
+LEFT JOIN `my-bigquery-project.crm.users` u
+  ON e.user_id = u.user_id;
+```
+
+---
+
+### Comparison: Real-Time ETL vs. ELT
+
+| Feature | Real-Time In-Flight ETL (Option A) | Downstream ELT in BigQuery (Option B) |
+| :--- | :--- | :--- |
+| **Enrichment Point** | Inside sGTM container before BigQuery write | Inside BigQuery via SQL View / dbt |
+| **Tagging Server Latency** | Adds 5–50ms network lookup time | **0ms (Immediate streaming write)** |
+| **Failure / Timeout Risk** | External API outage may delay or fail tag | **Zero risk to live tagging ingestion** |
+| **Downstream Ad Tags** | Shareable with Meta/Google Ads tags **only when the lookup runs in a shared variable or Transformation** | Available only inside BigQuery / BI tools |
+| **Best For** | Real-time conversion modeling & ad signals | BI reporting, dashboards, and ML analytics |
