@@ -1,6 +1,6 @@
-[English](README.md) | [简体中文](README_cn.md)
-
 ## Google Analytics 4 (GA4) 至 BigQuery 代码模板 (Tag Template)
+
+[English](README.md)
 
 这不是 Google 官方支持的产品。
 

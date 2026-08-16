@@ -1,6 +1,6 @@
-[English](README.md) | [简体中文](README_cn.md)
-
 ## Google Analytics 4 to BigQuery Tag Template
+
+[简体中文](README_cn.md)
 
 This is not an officially supported Google product.
 
